@@ -1,0 +1,659 @@
+<!-- 
+SESSION SUMMARY: 2026-05-05
+SUMMARYCHECK v20 - MULTI-THEME CHROMATIC SENTINEL
+
+ACCOMPLISHMENTS:
+1. INTEGRATED THEME SLIDER: Ported the segmented radio-slider from Refcheck v4.4, positioned within the Sentinel container border.
+2. CHROMATIC PURITY: 
+    - LIGHT: White background, pure black (#000000) primary text, zero gray fills (uses pale blue/green/red overlays).
+    - DARK: Black background, high-contrast cyan/white/blue palette.
+3. UI REFINEMENT: 
+    - Improved slider font size and vertical alignment.
+    - Standardized theme-aware CSS variables for Wdiff alignment mapping.
+4. VERSION ROLLOVER: Migrated all LCS logic and Matrix Rain effects into a theme-aware architecture.
+-->
+<!DOCTYPE html>
+<html lang="en" class="theme-matrix">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claim Tools v20 - Chromatic Sentinel</title>
+    <style>
+        /* Matrix Theme (Default) */
+        .theme-matrix {
+            --bg-color: #000000;
+            --text-primary: #00FF41;
+            --text-secondary: #008F11;
+            --border-color: #003B00;
+            --accent-glow: 0 0 10px rgba(0, 255, 65, 0.2);
+            --error-text: #FF3131;
+            --warning-text: #FFB000;
+            --info-text: #00FFFF;
+            --perfect-bg: #003B00;
+            --review-bg: #3B0000;
+            --input-bg: rgba(0, 5, 0, 0.7);
+            --container-bg: rgba(0, 0, 0, 0.85);
+            --section-bg: rgba(0, 15, 0, 0.1);
+            --slider-bg: #001a00;
+            /* Wdiff specific */
+            --match-bg: #003B00;
+            --del-bg: #3B0000;
+            --del-text: #FF3131;
+            --add-text: #008F11;
+        }
+
+        /* Light Theme (Strict Chromatic) */
+        .theme-light {
+            --bg-color: #FFFFFF;
+            --text-primary: #000000;
+            --text-secondary: #0000FF;
+            --border-color: #0000FF;
+            --accent-glow: none;
+            --error-text: #FF0000;
+            --warning-text: #FF8C00;
+            --info-text: #008B8B;
+            --perfect-bg: #F0FFF0;
+            --review-bg: #FFF0F0;
+            --input-bg: #FFFFFF;
+            --container-bg: #FFFFFF;
+            --section-bg: #F5F5FF;
+            --slider-bg: #E0E0FF;
+            /* Wdiff specific */
+            --match-bg: #E6F4EA;
+            --del-bg: #FCE8E6;
+            --del-text: #D93025;
+            --add-text: #188038;
+        }
+
+        /* Dark Theme (Strict Chromatic) */
+        .theme-dark {
+            --bg-color: #000000;
+            --text-primary: #FFFFFF;
+            --text-secondary: #00FFFF;
+            --border-color: #00FFFF;
+            --accent-glow: none;
+            --error-text: #FF0000;
+            --warning-text: #FFFF00;
+            --info-text: #00BFFF;
+            --perfect-bg: #002200;
+            --review-bg: #220000;
+            --input-bg: #000000;
+            --container-bg: #000000;
+            --section-bg: #001111;
+            --slider-bg: #002222;
+            /* Wdiff specific */
+            --match-bg: #003311;
+            --del-bg: #330000;
+            --del-text: #FF5252;
+            --add-text: #40C4FF;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0; padding: 2rem; display: flex; flex-direction: column; align-items: center;
+            overflow-x: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Matrix Rain Background */
+        #matrix-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; pointer-events: none;
+        }
+        .theme-light #matrix-canvas, .theme-dark #matrix-canvas { display: none; }
+
+        .container {
+            width: 95%; max-width: 1400px; background: var(--container-bg);
+            border: 2px solid var(--border-color); padding: 2rem; box-shadow: var(--accent-glow);
+            position: relative; z-index: 1; backdrop-filter: blur(2px);
+            transition: all 0.3s;
+        }
+
+        .header-row {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 30px;
+        }
+
+        h1 {
+            text-transform: uppercase; letter-spacing: 2px; margin: 0;
+            text-shadow: var(--accent-glow); border: none; font-size: 1.5rem;
+        }
+
+        /* Segmented Slider Control */
+        .theme-slider {
+            display: flex; background: var(--slider-bg); border: 1px solid var(--border-color);
+            border-radius: 20px; padding: 2px; position: relative; width: 260px; height: 32px;
+            align-items: center;
+        }
+        .theme-slider input { display: none; }
+        .theme-slider label {
+            flex: 1; text-align: center; font-size: 0.75rem; font-weight: bold;
+            cursor: pointer; z-index: 2; position: relative; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            transition: color 0.3s; color: var(--text-secondary);
+        }
+        .theme-slider input:checked + label { color: var(--text-primary); }
+        .slider-glider {
+            position: absolute; height: calc(100% - 4px); width: calc(33.33% - 2px);
+            background: var(--border-color); border-radius: 18px; top: 2px; left: 2px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1;
+        }
+        #t-matrix:checked ~ .slider-glider { transform: translateX(0); }
+        #t-light:checked ~ .slider-glider { transform: translateX(100%); }
+        #t-dark:checked ~ .slider-glider { transform: translateX(200%); }
+
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+        .input-group { display: flex; flex-direction: column; }
+        label { text-transform: uppercase; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: bold; }
+
+        textarea {
+            height: 200px; padding: 1rem; background-color: var(--input-bg);
+            color: var(--text-primary); border: 1px solid var(--border-color);
+            border-radius: 4px; font-size: 0.95rem; line-height: 1.5; resize: vertical;
+            font-family: 'Courier New', Courier, monospace;
+            transition: all 0.3s;
+        }
+        textarea:focus { outline: none; border-color: var(--text-primary); box-shadow: var(--accent-glow); }
+        
+        /* Audit Dashboard */
+        .audit-dashboard {
+            margin-bottom: 2rem; background: var(--section-bg);
+            border: 1px solid var(--border-color); padding: 1rem;
+        }
+        .audit-dashboard h3 { margin-top: 0; color: var(--text-secondary); text-transform: uppercase; font-size: 0.9rem; }
+        .audit-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .audit-table th, .audit-table td { text-align: left; padding: 0.6rem; border-bottom: 1px solid var(--border-color); }
+        .audit-table th { background: var(--border-color); color: var(--bg-color); font-weight: bold; text-transform: uppercase; }
+
+        .conf-badge { padding: 2px 8px; border-radius: 4px; font-weight: bold; color: var(--bg-color); }
+
+        .output-section { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); }
+        .section-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .section-header-row h3 { text-transform: uppercase; color: var(--text-secondary); font-size: 1rem; margin: 0; }
+
+        .display-box {
+            word-wrap: break-word; font-family: 'Courier New', Courier, monospace;
+            font-size: 0.95rem; line-height: 1.6; background: var(--input-bg);
+            padding: 1.5rem; border: 1px solid var(--border-color);
+            white-space: pre-wrap; color: var(--text-primary);
+            max-height: 500px; overflow-y: auto;
+        }
+        
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); }
+
+        /* Deep Dive Styles */
+        .deep-dive-container { display: flex; flex-direction: column; gap: 1.5rem; }
+        .claim-card { border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; background: var(--bg-color); }
+        .claim-card-header {
+            background: var(--border-color); padding: 0.6rem 1rem; font-weight: bold;
+            display: flex; justify-content: space-between; align-items: center;
+            color: var(--bg-color); text-transform: uppercase;
+        }
+        .header-controls { display: flex; align-items: center; gap: 1rem; }
+        .anchor-tag {
+            font-size: 0.8rem; color: var(--bg-color); background: var(--text-primary);
+            padding: 0.2rem 0.6rem; border-radius: 4px; font-weight: bold;
+        }
+        .claim-card-body { padding: 1rem; background: var(--bg-color); font-size: 0.95rem; line-height: 1.6; }
+
+        /* Toggle Styles */
+        .toggle-group { display: flex; background: var(--bg-color); border: 1px solid var(--text-primary); border-radius: 4px; padding: 2px; font-size: 0.75rem; }
+        .toggle-btn { padding: 2px 10px; cursor: pointer; color: var(--text-secondary); }
+        .toggle-btn.active { background: var(--text-primary); color: var(--bg-color); font-weight: bold; }
+
+        .btn-action {
+            background: var(--border-color); color: var(--bg-color); border: 1px solid var(--text-primary);
+            padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+            font-weight: bold; text-transform: uppercase;
+        }
+        .btn-action:hover { background: var(--text-primary); color: var(--bg-color); box-shadow: var(--accent-glow); }
+
+        /* Wdiff Styles */
+        .wdiff-match { color: var(--text-primary); background-color: var(--match-bg); font-weight: bold; padding: 0 2px; }
+        .wdiff-del { color: var(--del-text); background-color: var(--del-bg); text-decoration: line-through; padding: 0 2px; }
+        .wdiff-add { color: var(--add-text); border-bottom: 1px dashed var(--add-text); }
+        .paragraph-anchor {
+            display: inline-block; color: var(--info-text); font-weight: bold;
+            background: var(--slider-bg); padding: 0 4px; border-radius: 2px;
+            margin: 0 2px; border: 1px solid var(--info-text);
+        }
+        .claim-boundary {
+            display: block; border-top: 2px dashed var(--text-primary);
+            margin: 1.5rem 0 0.5rem 0; padding-top: 0.5rem; color: var(--text-primary);
+            font-weight: bold; font-size: 0.9rem; text-transform: uppercase;
+        }
+        .status-tag {
+            font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 4px;
+            background: var(--border-color); color: var(--bg-color);
+            margin-left: 10px; border: 1px solid var(--text-primary);
+        }
+        .virtual-marker { color: var(--warning-text); border: 1px solid var(--warning-text) !important; }
+        .hidden { display: none; }
+        
+        select { background: var(--bg-color); color: var(--text-primary); border: 1px solid var(--border-color); font-family: inherit; }
+
+        .status-bar {
+            position: fixed; bottom: 0; width: 100%; background: var(--border-color);
+            color: var(--bg-color); padding: 5px 20px; font-size: 0.7rem;
+            text-transform: uppercase; display: flex; justify-content: space-between; z-index: 100;
+        }
+    </style>
+</head>
+<body class="theme-matrix">
+    <canvas id="matrix-canvas"></canvas>
+
+    <div class="container">
+        <div class="header-row">
+            <h1>Claim Tools v20 <span id="status-display" class="status-tag">System Ready</span></h1>
+            <div class="theme-slider">
+                <input type="radio" id="t-matrix" name="theme" value="theme-matrix" checked onchange="changeTheme(this.value)">
+                <label for="t-matrix">MATRIX</label>
+                <input type="radio" id="t-light" name="theme" value="theme-light" onchange="changeTheme(this.value)">
+                <label for="t-light">LIGHT</label>
+                <input type="radio" id="t-dark" name="theme" value="theme-dark" onchange="changeTheme(this.value)">
+                <label for="t-dark">DARK</label>
+                <div class="slider-glider"></div>
+            </div>
+        </div>
+        
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="summary">Summary Input (Description Zone)</label>
+                <textarea id="summary" placeholder="[WAITING FOR DATA...]"></textarea>
+            </div>
+            <div class="input-group">
+                <label for="claims">Claims Input (Ground Truth)</label>
+                <textarea id="claims" placeholder="[WAITING FOR DATA...]"></textarea>
+            </div>
+        </div>
+
+        <div class="audit-dashboard">
+            <h3>Structural Audit Module</h3>
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th>Claim ID</th>
+                        <th>Conf.</th>
+                        <th>Anchor Point</th>
+                        <th>Res.</th>
+                        <th>Command</th>
+                    </tr>
+                </thead>
+                <tbody id="auditBody">
+                    <tr><td colspan="5" style="text-align:center; color: var(--text-secondary)">[BUFFER EMPTY]</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="output-section">
+            <div class="section-header-row">
+                <h3>0. Preprocessing Review</h3>
+                <button id="toggleSection0" class="btn-action">Access</button>
+            </div>
+            <div id="section0Content" class="hidden">
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>0.1 Summary Buffer (Cleaned)</label>
+                        <div id="preprocessedSummary" class="display-box"></div>
+                    </div>
+                    <div class="input-group">
+                        <label>0.2 Claims Buffer (Cleaned)</label>
+                        <div id="preprocessedClaims" class="display-box"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="output-section">
+            <div class="section-header-row">
+                <h3>1. Precision Claim Deep Dives</h3>
+                <div class="header-controls">
+                    <label>Filter:</label>
+                    <select id="diveFilter">
+                        <option value="all">ALL_DATA</option>
+                        <option value="low">CONF_LOW (<50%)</option>
+                        <option value="med">CONF_MED (<80%)</option>
+                    </select>
+                </div>
+            </div>
+            <div id="deepDiveList" class="deep-dive-container"></div>
+        </div>
+
+        <div class="output-section">
+            <div class="section-header-row">
+                <h3>2. Global Alignment Map</h3>
+                <button id="toggleSection3" class="btn-action">Render Map</button>
+            </div>
+            <div id="section3Content" class="hidden">
+                <div id="fullWdiff" class="display-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span>Sentinel Status: <span id="status-text">IDLE</span></span>
+        <span>Cross-Reference Alignment Active</span>
+    </div>
+
+    <script>
+        // Theme Logic
+        function changeTheme(theme) {
+            document.documentElement.className = theme;
+            document.body.className = theme;
+        }
+
+        // Matrix Rain Logic
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = window.innerWidth, height = canvas.height = window.innerHeight;
+        const characters = "ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789$+-*/=%\"'#&_(),.;:?!\\|{}<>[]^~ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const fontSize = 16;
+        const columns = Math.floor(width / fontSize);
+        const drops = Array(columns).fill(1);
+
+        function drawMatrix() {
+            if (document.documentElement.className !== 'theme-matrix') return;
+            ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            ctx.fillRect(0, 0, width, height);
+            ctx.font = fontSize + "px monospace";
+            for (let i = 0; i < drops.length; i++) {
+                const text = characters.charAt(Math.floor(Math.random() * characters.length));
+                ctx.fillStyle = "#00FF41";
+                if (Math.random() > 0.98) ctx.fillStyle = "#FFFFFF";
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(drawMatrix, 50);
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            const newColumns = Math.floor(width / fontSize);
+            if (newColumns > drops.length) {
+                for (let i = drops.length; i < newColumns; i++) drops[i] = 1;
+            }
+        });
+
+        // Tool Logic
+        const summaryInput = document.getElementById('summary');
+        const claimsInput = document.getElementById('claims');
+        const auditBody = document.getElementById('auditBody');
+        const diveFilter = document.getElementById('diveFilter');
+        
+        const preprocessedSummaryDiv = document.getElementById('preprocessedSummary');
+        const preprocessedClaimsDiv = document.getElementById('preprocessedClaims');
+        const deepDiveListDiv = document.getElementById('deepDiveList');
+        const fullWdiffDiv = document.getElementById('fullWdiff');
+        const statusDisplay = document.getElementById('status-display');
+        const statusText = document.getElementById('status-text');
+        const toggleS3Btn = document.getElementById('toggleSection3');
+        const section3Content = document.getElementById('section3Content');
+        const toggleS0Btn = document.getElementById('toggleSection0');
+        const section0Content = document.getElementById('section0Content');
+
+        const claimSettings = {};
+        let lastProcessingResults = [];
+
+        toggleS3Btn.onclick = () => {
+            const isHidden = section3Content.classList.toggle('hidden');
+            toggleS3Btn.textContent = isHidden ? "Render Map" : "Collapse Map";
+        };
+
+        toggleS0Btn.onclick = () => {
+            const isHidden = section0Content.classList.toggle('hidden');
+            toggleS0Btn.textContent = isHidden ? "Access" : "Lock";
+        };
+
+        diveFilter.onchange = () => renderDeepDives();
+
+        function clean(w) { return w.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+        function preprocessClaims(text) {
+            if (!text) return [];
+            const claimBlocks = text.split(/^\s*(\d+)\.\s+/gm);
+            const claims = [];
+            for (let i = 1; i < claimBlocks.length; i += 2) {
+                const num = claimBlocks[i];
+                let content = claimBlocks[i+1] || "";
+                content = content.replace(/\s*\(\d+[a-z]?\)/gi, '');
+                const introRegex = /^.*?\bclaims?\b.*?,(?=\s*(?:wherein|characterised in that|characterized in that))/gim;
+                content = content.replace(introRegex, '');
+                const boilerplateRegex = /^\s*(?:characterised|characterized) in that\s+/gim;
+                content = content.replace(boilerplateRegex, '');
+                const refRegex = /\s+according to (?:any )?(?:one of )?claims? \d+(?: (?:to|,|or) \d+)*/gi;
+                content = content.replace(refRegex, '');
+                const cNum = num.trim();
+                if (!claimSettings[cNum]) claimSettings[cNum] = 'sentence';
+                claims.push({ number: cNum, text: content.trim() });
+            }
+            return claims;
+        }
+
+        function preprocessSummaryIntoParagraphs(text) {
+            if (!text) return [];
+            const parts = text.split(/(\[\d{4}\])/g);
+            const paragraphs = [];
+            let currentMarker = null;
+            let virtualCount = 0; let zoneVirtualCount = 0;
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (/^\[\d{4}\]$/.test(part)) {
+                    currentMarker = part; zoneVirtualCount = 0;
+                } else {
+                    const content = part.trim();
+                    if (content.length === 0) continue;
+                    const subParts = content.split(/\n\s*\n|(?<=[.!?])\n/);
+                    subParts.forEach((sub, idx) => {
+                        const subTrimmed = sub.trim();
+                        if (subTrimmed.length === 0) return;
+                        let label; let isVirtual = false;
+                        if (currentMarker) {
+                            if (idx === 0 && zoneVirtualCount === 0) label = currentMarker;
+                            else {
+                                zoneVirtualCount++;
+                                label = `${currentMarker.slice(0, -1)}-V${zoneVirtualCount}]`;
+                                isVirtual = true;
+                            }
+                        } else {
+                            virtualCount++; label = `[V${String(virtualCount).padStart(4, '0')}]`;
+                            isVirtual = true;
+                        }
+                        paragraphs.push({ label, text: subTrimmed, isVirtual });
+                    });
+                }
+            }
+            return paragraphs;
+        }
+
+        function preprocessSummaryIntoSentences(paragraphs) {
+            const sentences = [];
+            paragraphs.forEach(para => {
+                const rawSentences = para.text.split(/(?<=[.!?])\s+/);
+                rawSentences.forEach((s, idx) => {
+                    const trimmed = s.trim();
+                    if (trimmed.length > 0) {
+                        sentences.push({ label: para.label, index: idx + 1, text: trimmed, isVirtual: para.isVirtual, parentParagraph: para });
+                    }
+                });
+            });
+            return sentences;
+        }
+
+        function tokenize(text, includeMarkers = true) {
+            if (!text) return [];
+            const markerRegex = includeMarkers ? '|\\[\\d{4}(?:-V\\d+)?\\]|\\[V\\d{4}\\]|--CLAIM-\\d+--' : '';
+            const regex = new RegExp(`(\\s+${markerRegex}|[.,:;!?()])`, 'g');
+            return text.split(regex).filter(x => x.length > 0);
+        }
+
+        function getLCSMatrix(oldWords, newWords) {
+            const matrix = Array(oldWords.length + 1).fill(null).map(() => Array(newWords.length + 1).fill(0));
+            for (let i = 1; i <= oldWords.length; i++) {
+                const oldClean = clean(oldWords[i-1]);
+                for (let j = 1; j <= newWords.length; j++) {
+                    const newClean = clean(newWords[j-1]);
+                    if (oldWords[i-1] === newWords[j-1] || (oldClean !== '' && oldClean === newClean)) matrix[i][j] = matrix[i-1][j-1] + 1;
+                    else matrix[i][j] = Math.max(matrix[i-1][j], matrix[i][j-1]);
+                }
+            }
+            return matrix;
+        }
+
+        function getGlobalTrace(claims, summaryRaw) {
+            const allClaimsText = claims.map(c => `--CLAIM-${c.number}-- ${c.text}`).join("\n\n");
+            const cWords = tokenize(allClaimsText, true);
+            const sWords = tokenize(summaryRaw, true);
+            const matrix = getLCSMatrix(cWords, sWords);
+            let html = ""; let i = cWords.length, j = sWords.length;
+            while (i > 0 || j > 0) {
+                const oldW = cWords[i-1] || "", newW = sWords[j-1] || "";
+                if (i > 0 && j > 0 && (oldW === newW || (clean(oldW) !== '' && clean(oldW) === clean(newW)))) {
+                    if (/--CLAIM-\d+--/.test(oldW)) {
+                        const num = oldW.match(/\d+/)[0];
+                        html = `<div class="claim-boundary">CLAIM ${num} DETECTED</div>` + html;
+                    } else html = (/\s+/.test(oldW)) ? oldW + html : `<span class="wdiff-match">${oldW}</span>` + html;
+                    i--; j--;
+                } else if (j > 0 && (i === 0 || matrix[i][j-1] >= matrix[i-1][j])) {
+                    if (/\[\d{4}(?:-V\\d+)?\]|\[V\\d{4}\]/.test(newW)) { 
+                        const isVirtual = /\[V|-V/.test(newW);
+                        const extraClass = isVirtual ? " virtual-marker" : "";
+                        html = `<span class="paragraph-anchor${extraClass}">${newW}</span>` + html; 
+                    }
+                    else if (/\s+/.test(newW)) html = newW + html;
+                    else html = `<span class="wdiff-add">${newW}</span>` + html;
+                    j--;
+                } else if (i > 0 && (j === 0 || matrix[i][j-1] < matrix[i-1][j])) {
+                    if (/--CLAIM-\d+--/.test(oldW)) {
+                        const num = oldW.match(/\d+/)[0];
+                        html = `<div class="claim-boundary">CLAIM ${num} DETECTED</div>` + html;
+                    } else if (/\s+/.test(oldW)) html = oldW + html;
+                    else html = `<span class="wdiff-del">${oldW}</span>` + html;
+                    i--;
+                }
+            }
+            return html;
+        }
+
+        function setGranularity(claimNum, mode) { claimSettings[claimNum] = mode; updateAll(); }
+        function scrollToClaim(num) { const el = document.getElementById(`claim-card-${num}`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+        function renderDeepDives() {
+            const filter = diveFilter.value;
+            let deepDiveHtml = "";
+            lastProcessingResults.forEach(res => {
+                if (filter === 'low' && res.confidence >= 50) return;
+                if (filter === 'med' && res.confidence >= 80) return;
+                const anchorClass = res.bestMatch.isVirtual ? "anchor-tag virtual-marker" : "anchor-tag";
+                deepDiveHtml += `
+                    <div class="claim-card" id="claim-card-${res.claim.number}">
+                        <div class="claim-card-header">
+                            <span>Claim ${res.claim.number}</span>
+                            <div class="header-controls">
+                                <div class="toggle-group">
+                                    <div class="toggle-btn ${res.mode === 'sentence' ? 'active' : ''}" onclick="setGranularity('${res.claim.number}', 'sentence')">SENTENCE</div>
+                                    <div class="toggle-btn ${res.mode === 'paragraph' ? 'active' : ''}" onclick="setGranularity('${res.claim.number}', 'paragraph')">PARA</div>
+                                    <div class="toggle-btn ${res.mode === '3-paragraphs' ? 'active' : ''}" onclick="setGranularity('${res.claim.number}', '3-paragraphs')">CONTEXT</div>
+                                </div>
+                                <span class="${anchorClass}">ANCHOR: ${res.displayLabel}</span>
+                            </div>
+                        </div>
+                        <div class="claim-card-body">${res.precisionWdiff}</div>
+                    </div>`;
+            });
+            deepDiveListDiv.innerHTML = deepDiveHtml;
+        }
+
+        function updateAll() {
+            const summaryRaw = summaryInput.value;
+            const claimsRaw = claimsInput.value;
+            if (!claimsRaw && !summaryRaw) { statusDisplay.textContent = 'System Ready'; statusText.textContent = 'IDLE'; return; }
+            statusDisplay.textContent = 'Executing Alignment...';
+            statusText.textContent = 'SYNCHRONIZING...';
+
+            setTimeout(() => {
+                const paragraphs = preprocessSummaryIntoParagraphs(summaryRaw);
+                const sentences = preprocessSummaryIntoSentences(paragraphs);
+                const claims = preprocessClaims(claimsRaw);
+                preprocessedSummaryDiv.textContent = paragraphs.map(p => `${p.label} ${p.text}`).join('\n\n');
+                preprocessedClaimsDiv.textContent = claims.map(c => `Claim ${c.number}:\n${c.text}`).join('\n\n');
+
+                if (claims.length > 0) {
+                    fullWdiffDiv.innerHTML = getGlobalTrace(claims, summaryRaw);
+                    lastProcessingResults = []; let auditHtml = "";
+                    claims.forEach(claim => {
+                        const mode = claimSettings[claim.number] || 'sentence';
+                        const matchTargets = (mode === 'sentence') ? sentences : paragraphs;
+                        let bestMatch = matchTargets[0] || { label: "N/A", text: "" };
+                        let maxLCS = -1;
+                        const cTokens = tokenize(claim.text, false).filter(x => clean(x) !== '');
+                        matchTargets.forEach(t => {
+                            const tTokens = tokenize(t.text, false).filter(x => clean(x) !== '');
+                            if (tTokens.length <= maxLCS) return;
+                            const matrix = getLCSMatrix(cTokens, tTokens);
+                            const lcs = matrix[cTokens.length][tTokens.length];
+                            if (lcs > maxLCS) { maxLCS = lcs; bestMatch = t; }
+                        });
+                        const confidence = cTokens.length > 0 ? (maxLCS / cTokens.length) * 100 : 0;
+                        const status = confidence > 80 ? 'HIGH' : confidence > 50 ? 'MED' : 'LOW';
+                        const statusColor = confidence > 80 ? 'var(--text-primary)' : confidence > 50 ? 'var(--warning-text)' : 'var(--error-text)';
+                        let displaySource = bestMatch.text;
+                        let displayLabel = (mode === 'sentence') ? `${bestMatch.label} S${bestMatch.index}` : `${bestMatch.label}`;
+                        if (mode === '3-paragraphs') {
+                            const anchorPara = (mode === 'sentence') ? bestMatch.parentParagraph : bestMatch;
+                            const bestParaIndex = paragraphs.indexOf(anchorPara);
+                            const start = Math.max(0, bestParaIndex - 1);
+                            const end = Math.min(paragraphs.length, bestParaIndex + 2);
+                            const contextRange = paragraphs.slice(start, end);
+                            displaySource = contextRange.map(p => `${p.label} ${p.text}`).join('\n\n');
+                            displayLabel = `${contextRange[0].label} - ${contextRange[contextRange.length-1].label}`;
+                        }
+                        const cWordsLocal = tokenize(claim.text, false);
+                        const sWordsLocal = tokenize(displaySource, true);
+                        const matrixLocal = getLCSMatrix(cWordsLocal, sWordsLocal);
+                        let precisionWdiff = ""; let ii = cWordsLocal.length, jj = sWordsLocal.length;
+                        while (ii > 0 || jj > 0) {
+                            const oW = cWordsLocal[ii-1] || "", nW = sWordsLocal[jj-1] || "";
+                            if (ii > 0 && jj > 0 && (oW === nW || (clean(oW) !== '' && clean(oW) === clean(nW)))) {
+                                precisionWdiff = (/\s+/.test(oW)) ? oW + precisionWdiff : `<span class="wdiff-match">${oW}</span>` + precisionWdiff;
+                                ii--; jj--;
+                            } else if (jj > 0 && (ii === 0 || matrixLocal[ii][jj-1] >= matrixLocal[ii-1][jj])) {
+                                if (/\[\d{4}(?:-V\\d+)?\]|\[V\d{4}\]/.test(nW)) precisionWdiff = `<span class="paragraph-anchor">${nW}</span>` + precisionWdiff;
+                                else if (/\s+/.test(nW)) precisionWdiff = nW + precisionWdiff;
+                                else precisionWdiff = `<span class="wdiff-add">${nW}</span>` + precisionWdiff;
+                                jj--;
+                            } else if (ii > 0 && (jj === 0 || matrixLocal[ii][jj-1] < matrixLocal[ii-1][jj])) {
+                                if (/\s+/.test(oW)) precisionWdiff = oW + precisionWdiff;
+                                else precisionWdiff = `<span class="wdiff-del">${oW}</span>` + precisionWdiff;
+                                ii--;
+                            }
+                        }
+                        lastProcessingResults.push({ claim, bestMatch, confidence, precisionWdiff, displayLabel, mode });
+                        auditHtml += `
+                            <tr>
+                                <td><b>${claim.number}</b></td>
+                                <td><span class="conf-badge" style="background:${statusColor}">${confidence.toFixed(0)}%</span></td>
+                                <td>${displayLabel}</td>
+                                <td>${status}</td>
+                                <td><button class="btn-action" style="padding: 2px 8px; font-size:0.7rem" onclick="scrollToClaim('${claim.number}')">LOAD</button></td>
+                            </tr>`;
+                    });
+                    auditBody.innerHTML = auditHtml;
+                    renderDeepDives();
+                }
+                statusDisplay.textContent = 'Trace Complete'; statusText.textContent = 'TRACE_COMPLETE';
+            }, 10);
+        }
+
+        summaryInput.addEventListener('input', updateAll);
+        claimsInput.addEventListener('input', updateAll);
+    </script>
+</body>
+</html>
